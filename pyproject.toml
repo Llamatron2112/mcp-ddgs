@@ -1,0 +1,25 @@
+[project]
+name = "mcp-ddgs"
+version = "0.1.0"
+description = "Serveur MCP de recherche web DuckDuckGo — texte, actualités, images"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = [
+    "ddgs>=9.14.4",
+    "mcp>=2.0.0",
+]
+
+[project.urls]
+Repository = "https://github.com/USER/mcp-ddgs"
+
+[project.scripts]
+mcp-ddgs = "server:run"
+
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["server"]
