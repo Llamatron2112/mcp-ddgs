@@ -26,7 +26,7 @@ TOOLS = [
     Tool(
         name="ddgs_text_search",
         description="Recherche web texte via DuckDuckGo. Retourne titre, URL et extrait pour chaque résultat.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {
@@ -45,7 +45,7 @@ TOOLS = [
     Tool(
         name="ddgs_news_search",
         description="Recherche d'actualités via DuckDuckGo. Retourne les articles récents correspondant à la requête.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {
@@ -64,7 +64,7 @@ TOOLS = [
     Tool(
         name="ddgs_image_search",
         description="Recherche d'images via DuckDuckGo. Retourne les URLs et descriptions des images trouvées.",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {
@@ -168,7 +168,7 @@ async def handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResult
     if handler is None:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Outil inconnu : {params.name}")],
-            isError=True,
+            is_error=True,
         )
     try:
         arguments = params.arguments or {}
@@ -179,7 +179,7 @@ async def handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResult
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=f"Erreur : {e}")],
-            isError=True,
+            is_error=True,
         )
 
 
