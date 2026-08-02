@@ -25,7 +25,7 @@ from mcp.types import (
 TOOLS = [
     Tool(
         name="ddgs_text_search",
-        description="Recherche web texte via DuckDuckGo. Retourne titre, URL et extrait pour chaque résultat.",
+        description="Recherche web texte (méta-recherche: duckduckgo, bing, google, brave, yahoo, yandex, startpage, mojeek, wikipedia). Retourne titre, URL et extrait pour chaque résultat.",
         input_schema={
             "type": "object",
             "properties": {
@@ -38,13 +38,19 @@ TOOLS = [
                     "description": "Nombre maximum de résultats (défaut: 10, max: 20)",
                     "default": 10,
                 },
+                "backend": {
+                    "type": "string",
+                    "description": "Moteur de recherche à interroger (défaut: auto). Plusieurs moteurs possibles, séparés par des virgules (ex: 'bing,google').",
+                    "enum": ["auto", "bing", "brave", "duckduckgo", "google", "grokipedia", "mojeek", "startpage", "yandex", "yahoo", "wikipedia"],
+                    "default": "auto",
+                },
             },
             "required": ["query"],
         },
     ),
     Tool(
         name="ddgs_news_search",
-        description="Recherche d'actualités via DuckDuckGo. Retourne les articles récents correspondant à la requête.",
+        description="Recherche d'actualités (méta-recherche: duckduckgo, bing, yahoo). Retourne les articles récents correspondant à la requête.",
         input_schema={
             "type": "object",
             "properties": {
@@ -57,13 +63,19 @@ TOOLS = [
                     "description": "Nombre maximum de résultats (défaut: 10, max: 20)",
                     "default": 10,
                 },
+                "backend": {
+                    "type": "string",
+                    "description": "Moteur de recherche à interroger (défaut: auto). Plusieurs moteurs possibles, séparés par des virgules.",
+                    "enum": ["auto", "bing", "duckduckgo", "yahoo"],
+                    "default": "auto",
+                },
             },
             "required": ["query"],
         },
     ),
     Tool(
         name="ddgs_image_search",
-        description="Recherche d'images via DuckDuckGo. Retourne les URLs et descriptions des images trouvées.",
+        description="Recherche d'images (méta-recherche: duckduckgo, bing). Retourne les URLs et descriptions des images trouvées.",
         input_schema={
             "type": "object",
             "properties": {
@@ -76,6 +88,12 @@ TOOLS = [
                     "description": "Nombre maximum de résultats (défaut: 10, max: 20)",
                     "default": 10,
                 },
+                "backend": {
+                    "type": "string",
+                    "description": "Moteur de recherche à interroger (défaut: auto). Plusieurs moteurs possibles, séparés par des virgules.",
+                    "enum": ["auto", "bing", "duckduckgo"],
+                    "default": "auto",
+                },
             },
             "required": ["query"],
         },
@@ -87,10 +105,10 @@ TOOLS = [
 # ---------------------------------------------------------------------------
 
 
-def _search_text(query: str, max_results: int) -> str:
+def _search_text(query: str, max_results: int, backend: str = "auto") -> str:
     max_results = min(max_results, 20)
     with DDGS() as ddgs:
-        results = list(ddgs.text(query, max_results=max_results))
+        results = list(ddgs.text(query, max_results=max_results, backend=backend))
     if not results:
         return f"Aucun résultat pour « {query} »."
     lines = [f"Résultats de recherche pour « {query} » :\n"]
@@ -104,10 +122,10 @@ def _search_text(query: str, max_results: int) -> str:
     return "\n".join(lines)
 
 
-def _search_news(query: str, max_results: int) -> str:
+def _search_news(query: str, max_results: int, backend: str = "auto") -> str:
     max_results = min(max_results, 20)
     with DDGS() as ddgs:
-        results = list(ddgs.news(query, max_results=max_results))
+        results = list(ddgs.news(query, max_results=max_results, backend=backend))
     if not results:
         return f"Aucune actualité pour « {query} »."
     lines = [f"Actualités pour « {query} » :\n"]
@@ -124,10 +142,10 @@ def _search_news(query: str, max_results: int) -> str:
     return "\n".join(lines)
 
 
-def _search_images(query: str, max_results: int) -> str:
+def _search_images(query: str, max_results: int, backend: str = "auto") -> str:
     max_results = min(max_results, 20)
     with DDGS() as ddgs:
-        results = list(ddgs.images(query, max_results=max_results))
+        results = list(ddgs.images(query, max_results=max_results, backend=backend))
     if not results:
         return f"Aucune image pour « {query} »."
     lines = [f"Images pour « {query} » :\n"]
@@ -174,7 +192,8 @@ async def handle_call_tool(ctx, params: CallToolRequestParams) -> CallToolResult
         arguments = params.arguments or {}
         query = arguments.get("query", "")
         max_results = arguments.get("max_results", 10)
-        result_text = handler(query, max_results)
+        backend = arguments.get("backend", "auto")
+        result_text = handler(query, max_results, backend)
         return CallToolResult(content=[TextContent(type="text", text=result_text)])
     except Exception as e:
         return CallToolResult(
