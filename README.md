@@ -27,7 +27,7 @@ extensions:
     cmd: uvx
     args:
       - --from
-      - git+https://github.com/USER/mcp-ddgs.git
+      - git+https://github.com/Llamatron2112/mcp-ddgs.git
       - mcp-ddgs
     timeout: 300
 ```
@@ -39,7 +39,7 @@ extensions:
   "mcpServers": {
     "ddgs": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/USER/mcp-ddgs.git", "mcp-ddgs"]
+      "args": ["--from", "git+https://github.com/Llamatron2112/mcp-ddgs.git", "mcp-ddgs"]
     }
   }
 }
@@ -48,7 +48,7 @@ extensions:
 ## Développement local
 
 ```bash
-git clone https://github.com/USER/mcp-ddgs.git
+git clone https://github.com/Llamatron2112/mcp-ddgs.git
 cd mcp-ddgs
 uv sync
 uv run mcp-ddgs
