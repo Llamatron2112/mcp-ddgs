@@ -6,9 +6,11 @@ par n'importe quel client MCP, notamment Goose.
 """
 
 import gzip
+import http.client
 import json
 import urllib.request
-from typing import Any, cast
+from collections.abc import Iterator
+from typing import Protocol, cast
 
 import anyio
 from ddgs import DDGS
@@ -25,6 +27,31 @@ from mcp.types import (
 )
 from trafilatura import bare_extraction, fetch_url
 from trafilatura.settings import Document
+
+JsonValue = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+
+
+class _HtmlNode(Protocol):
+    """Sous-ensemble du type lxml.html.HtmlElement utilisé par l'extraction."""
+
+    text: str | None
+
+    def get(self, key: str, default: str | None = None) -> str | None: ...
+    def text_content(self) -> str: ...
+    def drop_tree(self) -> None: ...
+    def findtext(self, path: str) -> str | None: ...
+    def xpath(self, path: str, **_vars: object) -> list["_HtmlNode"]: ...
+    def iter(self, *tags: str) -> Iterator["_HtmlNode"]: ...
+
+
+def _parse_html(html_source: str) -> _HtmlNode:
+    """Parse une page HTML en nœud lxml, typé selon le sous-ensemble utilisé."""
+    return cast(_HtmlNode, cast(object, lxml_html.fromstring(html_source)))
+
+
+def _loads_json(text: str) -> JsonValue:
+    """Équivalent typé de json.loads pour les blocs JSON-LD."""
+    return cast(JsonValue, json.loads(text))
 
 # ---------------------------------------------------------------------------
 # Définition des outils
@@ -138,9 +165,9 @@ TOOLS = [
 # ---------------------------------------------------------------------------
 
 
-def _search_text(arguments: dict[str, Any]) -> str:
+def _search_text(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
-    max_results = min(int(arguments.get("max_results", 10)), 20)
+    max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
     backend = arguments.get("backend", "auto")
     with DDGS() as ddgs:
         results = list(ddgs.text(query, max_results=max_results, backend=backend))
@@ -157,9 +184,9 @@ def _search_text(arguments: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _search_news(arguments: dict[str, Any]) -> str:
+def _search_news(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
-    max_results = min(int(arguments.get("max_results", 10)), 20)
+    max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
     backend = arguments.get("backend", "auto")
     with DDGS() as ddgs:
         results = list(ddgs.news(query, max_results=max_results, backend=backend))
@@ -179,9 +206,9 @@ def _search_news(arguments: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _search_images(arguments: dict[str, Any]) -> str:
+def _search_images(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
-    max_results = min(int(arguments.get("max_results", 10)), 20)
+    max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
     backend = arguments.get("backend", "auto")
     with DDGS() as ddgs:
         results = list(ddgs.images(query, max_results=max_results, backend=backend))
@@ -203,7 +230,7 @@ def _download(url: str) -> str | None:
     (qui respecte les variables d'environnement de proxy http_proxy/https_proxy)."""
     try:
         downloaded = fetch_url(url)
-    except Exception:
+    except (OSError, ValueError, TypeError):
         downloaded = None
     if downloaded is not None:
         return downloaded
@@ -216,7 +243,7 @@ def _download(url: str) -> str | None:
                 "Accept-Encoding": "identity",
             },
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with cast(http.client.HTTPResponse, urllib.request.urlopen(req, timeout=30)) as resp:
             data = resp.read()
             if resp.headers.get("Content-Encoding") == "gzip":
                 data = gzip.decompress(data)
@@ -249,7 +276,7 @@ _LD_FIELD_LABELS = {
 }
 
 
-def _walk_ld_json(node: Any, lines: list[str]) -> None:
+def _walk_ld_json(node: JsonValue, lines: list[str]) -> None:
     """Parcourt récursivement un bloc JSON-LD et collecte les infos produit/prix."""
     if isinstance(node, dict):
         types = node.get("@type")
@@ -281,17 +308,18 @@ def _walk_ld_json(node: Any, lines: list[str]) -> None:
 def _extract_structured_data(html_source: str) -> str:
     """Extrait les infos produit/prix : JSON-LD, meta og:price/product:price, microdata itemprop."""
     try:
-        tree = lxml_html.fromstring(html_source)
-    except Exception:
+        tree = _parse_html(html_source)
+    except (SyntaxError, ValueError, TypeError):
         return ""
 
     lines: list[str] = []
     for script in tree.xpath("//script[@type='application/ld+json']"):
         try:
-            data = json.loads(script.text or "")
+            data = _loads_json(script.text or "")
         except (json.JSONDecodeError, ValueError):
             continue
-        _walk_ld_json(data, lines)
+        if isinstance(data, (dict, list)):
+            _walk_ld_json(data, lines)
 
     for prop in ("product:price:amount", "og:price:amount", "product:price:currency", "og:price:currency"):
         for meta in tree.xpath(f"//meta[@property='{prop}']"):
@@ -318,11 +346,11 @@ def _extract_structured_data(html_source: str) -> str:
 def _full_text(html_source: str) -> str:
     """Tout le texte visible de la page (aucun filtrage éditorial)."""
     try:
-        tree = lxml_html.fromstring(html_source)
+        tree = _parse_html(html_source)
         for tag in list(tree.iter("script", "style", "noscript", "template", "head")):
             tag.drop_tree()
         text = tree.text_content()
-    except Exception:
+    except (SyntaxError, ValueError, TypeError):
         return ""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     return "\n".join(lines)
@@ -330,21 +358,21 @@ def _full_text(html_source: str) -> str:
 
 def _page_title(html_source: str) -> str | None:
     try:
-        tree = lxml_html.fromstring(html_source)
+        tree = _parse_html(html_source)
         title = tree.findtext(".//title")
         return title.strip() if title else None
-    except Exception:
+    except (SyntaxError, ValueError, TypeError):
         return None
 
 
-def _fetch_url(arguments: dict[str, Any]) -> str:
-    url = arguments.get("url", "").strip()
+def _fetch_url(arguments: dict[str, JsonValue]) -> str:
+    url = cast(str, arguments.get("url", "")).strip()
     if not url.startswith(("http://", "https://")):
         raise ValueError(f"URL invalide : « {url} » — doit commencer par http:// ou https://.")
-    mode = arguments.get("mode", "article")
+    mode = cast(str, arguments.get("mode", "article"))
     if mode not in ("article", "full"):
         raise ValueError(f"Mode invalide : « {mode} » — doit être « article » ou « full ».")
-    max_chars = max(1, min(int(arguments.get("max_chars", 100000)), 100000))
+    max_chars = max(1, min(int(cast(int, arguments.get("max_chars", 100000))), 100000))
 
     downloaded = _download(url)
     if downloaded is None:
