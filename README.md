@@ -2,7 +2,7 @@
 
 Serveur MCP pour la recherche web via **DuckDuckGo** — gratuit, anonyme, sans clé API.
 
-Donne aux agents IA (Goose, Claude Desktop, Cursor, Continue, etc.) la capacité de **chercher sur le web** en temps réel.
+Donne aux agents IA (Goose, Claude Desktop, Cursor, Continue, etc.) la capacité de **chercher sur le web** en temps réel et **d'extraire le contenu propre d'une page** (sans publicités ni navigation).
 
 ## Outils
 
@@ -11,6 +11,7 @@ Donne aux agents IA (Goose, Claude Desktop, Cursor, Continue, etc.) la capacité
 | `ddgs_text_search` | Recherche web classique — titre, URL, extrait |
 | `ddgs_news_search` | Actualités récentes |
 | `ddgs_image_search` | Recherche d'images — URLs + descriptions |
+| `ddgs_fetch_url` | Extrait le texte principal d'une page + données structurées (prix/produit) ; mode `full` pour tout le texte visible |
 
 ## Installation rapide
 
