@@ -79,6 +79,11 @@ TOOLS = [
                     "enum": ["auto", "bing", "brave", "duckduckgo", "google", "grokipedia", "mojeek", "startpage", "yandex", "yahoo", "wikipedia"],
                     "default": "auto",
                 },
+                "region": {
+                    "type": "string",
+                    "description": "Pays/région des résultats (défaut: us-en). Ex: fr-fr, us-en, uk-en, de-de, es-es, it-it, pt-br, ru-ru, ja-jp…",
+                    "default": "us-en",
+                },
             },
             "required": ["query"],
         },
@@ -104,6 +109,11 @@ TOOLS = [
                     "enum": ["auto", "bing", "duckduckgo", "yahoo"],
                     "default": "auto",
                 },
+                "region": {
+                    "type": "string",
+                    "description": "Pays/région des résultats (défaut: us-en). Ex: fr-fr, us-en, uk-en, de-de, es-es, it-it, pt-br, ru-ru, ja-jp…",
+                    "default": "us-en",
+                },
             },
             "required": ["query"],
         },
@@ -128,6 +138,11 @@ TOOLS = [
                     "description": "Moteur de recherche à interroger (défaut: auto). Plusieurs moteurs possibles, séparés par des virgules.",
                     "enum": ["auto", "bing", "duckduckgo"],
                     "default": "auto",
+                },
+                "region": {
+                    "type": "string",
+                    "description": "Pays/région des résultats (défaut: us-en). Ex: fr-fr, us-en, uk-en, de-de, es-es, it-it, pt-br, ru-ru, ja-jp…",
+                    "default": "us-en",
                 },
             },
             "required": ["query"],
@@ -168,9 +183,10 @@ TOOLS = [
 def _search_text(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
     max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
-    backend = arguments.get("backend", "auto")
+    backend = cast(str, arguments.get("backend", "auto"))
+    region = cast(str, arguments.get("region", "us-en"))
     with DDGS() as ddgs:
-        results = list(ddgs.text(query, max_results=max_results, backend=backend))
+        results = list(ddgs.text(query, max_results=max_results, backend=backend, region=region))
     if not results:
         return f"Aucun résultat pour « {query} »."
     lines = [f"Résultats de recherche pour « {query} » :\n"]
@@ -187,9 +203,10 @@ def _search_text(arguments: dict[str, JsonValue]) -> str:
 def _search_news(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
     max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
-    backend = arguments.get("backend", "auto")
+    backend = cast(str, arguments.get("backend", "auto"))
+    region = cast(str, arguments.get("region", "us-en"))
     with DDGS() as ddgs:
-        results = list(ddgs.news(query, max_results=max_results, backend=backend))
+        results = list(ddgs.news(query, max_results=max_results, backend=backend, region=region))
     if not results:
         return f"Aucune actualité pour « {query} »."
     lines = [f"Actualités pour « {query} » :\n"]
@@ -209,9 +226,10 @@ def _search_news(arguments: dict[str, JsonValue]) -> str:
 def _search_images(arguments: dict[str, JsonValue]) -> str:
     query = arguments.get("query", "")
     max_results = min(int(cast(int, arguments.get("max_results", 10))), 20)
-    backend = arguments.get("backend", "auto")
+    backend = cast(str, arguments.get("backend", "auto"))
+    region = cast(str, arguments.get("region", "us-en"))
     with DDGS() as ddgs:
-        results = list(ddgs.images(query, max_results=max_results, backend=backend))
+        results = list(ddgs.images(query, max_results=max_results, backend=backend, region=region))
     if not results:
         return f"Aucune image pour « {query} »."
     lines = [f"Images pour « {query} » :\n"]
