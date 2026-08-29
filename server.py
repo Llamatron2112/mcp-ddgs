@@ -149,8 +149,8 @@ TOOLS = [
         },
     ),
     Tool(
-        name="ddgs_fetch_url",
-        description="Extrait le contenu d'une page web (URL) : texte principal propre + données structurées (prix, produit) si présentes — prêt à être lu par un LLM. Mode « full » pour tout le texte visible (pages produit).",
+        name="ddgs_fetch_url_article",
+        description="Extrait le texte éditorial principal d'une page web (article, blog, actualité, documentation) : en-tête (titre, URL) + texte propre, sans navigation ni publicités. N'inclut pas les données produit/prix.\n\nRÈGLE DE CHOIX — utilisez cet outil uniquement pour des pages à contenu rédactionnel (article de presse, blog, documentation, page d'information). NE PAS l'utiliser pour les pages produit/e-commerce : l'extraction y renvoie un contenu pauvre ou hors sujet (ex. un simple avis client), sans le nom du produit ni le prix. Pour toute page produit, recherche de prix, de caractéristiques ou d'avis, ainsi qu'en cas de doute sur le type de page, utilisez plutôt ddgs_fetch_url_full.",
         input_schema={
             "type": "object",
             "properties": {
@@ -158,11 +158,24 @@ TOOLS = [
                     "type": "string",
                     "description": "L'URL de la page à extraire",
                 },
-                "mode": {
+                "max_chars": {
+                    "type": "integer",
+                    "description": "Limite en caractères du texte retourné (défaut: 100000 — protection contre les pages démesurées)",
+                    "default": 100000,
+                },
+            },
+            "required": ["url"],
+        },
+    ),
+    Tool(
+        name="ddgs_fetch_url_full",
+        description="Extrait tout le texte visible d'une page web, sans filtrage éditorial (menus, prix, caractéristiques, avis clients…), et ajoute la section « Données structurées (produit / prix) » quand la page en expose (JSON-LD, meta og:price, microdata) — le prix s'y trouve la plupart du temps.\n\nRÈGLE DE CHOIX — utilisez cet outil pour : les pages produit/e-commerce, toute recherche de prix, de caractéristiques ou d'avis, et en cas de doute sur le type de page (c'est l'outil le plus sûr). Inconvénient : le retour contient du bruit (bannières cookies, menus, listes). Pour du contenu purement rédactionnel (articles, blogs), ddgs_fetch_url_article donne un texte plus propre.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
                     "type": "string",
-                    "description": "Mode d'extraction : « article » (texte principal nettoyé — défaut) ou « full » (tout le texte visible, recommandé pour les pages produit/prix)",
-                    "enum": ["article", "full"],
-                    "default": "article",
+                    "description": "L'URL de la page à extraire",
                 },
                 "max_chars": {
                     "type": "integer",
@@ -383,43 +396,57 @@ def _page_title(html_source: str) -> str | None:
         return None
 
 
-def _fetch_url(arguments: dict[str, JsonValue]) -> str:
+def _fetch_url_article(arguments: dict[str, JsonValue]) -> str:
     url = cast(str, arguments.get("url", "")).strip()
     if not url.startswith(("http://", "https://")):
         raise ValueError(f"URL invalide : « {url} » — doit commencer par http:// ou https://.")
-    mode = cast(str, arguments.get("mode", "article"))
-    if mode not in ("article", "full"):
-        raise ValueError(f"Mode invalide : « {mode} » — doit être « article » ou « full ».")
     max_chars = max(1, min(int(cast(int, arguments.get("max_chars", 100000))), 100000))
 
     downloaded = _download(url)
     if downloaded is None:
         return f"Impossible de télécharger « {url} » (accès refusé, page introuvable ou erreur réseau)."
 
-    if mode == "full":
-        title = _page_title(downloaded)
-        body = _full_text(downloaded)
-    else:
+    doc = cast(
+        Document | None,
+        bare_extraction(
+            downloaded,
+            url=url,
+            favor_precision=True,
+            include_comments=False,
+            include_tables=False,
+            with_metadata=True,
+        ),
+    )
+    if doc is None:
         doc = cast(
             Document | None,
-            bare_extraction(
-                downloaded,
-                url=url,
-                favor_precision=True,
-                include_comments=False,
-                include_tables=False,
-                with_metadata=True,
-            ),
+            bare_extraction(downloaded, url=url, favor_precision=False, include_tables=True),
         )
-        if doc is None:
-            doc = cast(
-                Document | None,
-                bare_extraction(downloaded, url=url, favor_precision=False, include_tables=True),
-            )
-        title = doc.title if doc else _page_title(downloaded)
-        body = (doc.text or "") if doc else ""
+    title = doc.title if doc else _page_title(downloaded)
+    body = (doc.text or "") if doc else ""
 
+    return _format_result(url, title, body, "", max_chars)
+
+
+def _fetch_url_full(arguments: dict[str, JsonValue]) -> str:
+    url = cast(str, arguments.get("url", "")).strip()
+    if not url.startswith(("http://", "https://")):
+        raise ValueError(f"URL invalide : « {url} » — doit commencer par http:// ou https://.")
+    max_chars = max(1, min(int(cast(int, arguments.get("max_chars", 100000))), 100000))
+
+    downloaded = _download(url)
+    if downloaded is None:
+        return f"Impossible de télécharger « {url} » (accès refusé, page introuvable ou erreur réseau)."
+
+    title = _page_title(downloaded)
+    body = _full_text(downloaded)
     structured = _extract_structured_data(downloaded)
+
+    return _format_result(url, title, body, structured, max_chars)
+
+
+def _format_result(url: str, title: str | None, body: str, structured: str, max_chars: int) -> str:
+    """Assemble l'en-tête, le corps et les données structurées, avec troncature."""
     structured_section = f"\n\n{structured}" if structured else ""
     header = f"Titre : {title}\nURL : {url}\n\n" if title else f"URL : {url}\n\n"
 
@@ -438,7 +465,8 @@ HANDLERS = {
     "ddgs_text_search": _search_text,
     "ddgs_news_search": _search_news,
     "ddgs_image_search": _search_images,
-    "ddgs_fetch_url": _fetch_url,
+    "ddgs_fetch_url_article": _fetch_url_article,
+    "ddgs_fetch_url_full": _fetch_url_full,
 }
 
 # ---------------------------------------------------------------------------

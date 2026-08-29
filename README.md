@@ -11,7 +11,8 @@ Donne aux agents IA (Goose, Claude Desktop, Cursor, Continue, etc.) la capacité
 | `ddgs_text_search` | Recherche web classique — titre, URL, extrait |
 | `ddgs_news_search` | Actualités récentes |
 | `ddgs_image_search` | Recherche d'images — URLs + descriptions |
-| `ddgs_fetch_url` | Extrait le texte principal d'une page + données structurées (prix/produit) ; mode `full` pour tout le texte visible |
+| `ddgs_fetch_url_article` | Texte éditorial principal (articles, blogs, actualités) — sans données produit/prix |
+| `ddgs_fetch_url_full` | Tout le texte visible + données structurées (prix/produit) — pages produit/e-commerce, et en cas de doute |
 
 ## Installation rapide
 
